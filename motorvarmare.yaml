@@ -1,0 +1,217 @@
+# Delar av kod tagen från: https://github.com/Gnaget2/Car-Heater-Package
+#
+# Motorvärmarstyrning
+# SteelProd Sweden 2020
+ 
+# AUTOMATION   
+automation:
+  - alias: 'MV1 Starta Motorvärmare på beräknad tid'
+    id: mv1berstart
+    trigger:
+      platform: time_pattern
+      minutes: "/1"
+      seconds: 00
+    condition:
+      condition: and
+      conditions:
+        - condition: template
+          value_template: '{{ now().time().strftime("%H:%M") == states.sensor.mv1_beraknad_starttid.state }}'
+        - condition: template
+          value_template: '{{ states.sensor.mv_kortid.state|float > 0 }}'
+        - condition: state
+          entity_id: input_boolean.mv1_aktiverad
+          state: 'on'
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: input_boolean.mv1_endast_veckodagar
+              state: 'off'
+            - condition: time
+              weekday:
+                - mon
+                - tue
+                - wed
+                - thu
+                - fri
+    action:
+      - service: switch.turn_on
+        entity_id: switch.mv1_rela
+
+  - alias: 'MV2 Starta Motorvärmare på beräknad tid'
+    trigger:
+      platform: time_pattern
+      minutes: "/1"
+      seconds: 00
+    condition:
+      condition: and
+      conditions:
+        - condition: template
+          value_template: '{{ now().time().strftime("%H:%M") == states.sensor.mv2_beraknad_starttid.state }}'
+        - condition: template
+          value_template: '{{ states.sensor.mv_kortid.state|float > 0 }}'
+        - condition: state
+          entity_id: input_boolean.mv2_aktiverad
+          state: 'on'
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: input_boolean.mv2_endast_veckodagar
+              state: 'off'
+            - condition: time
+              weekday:
+                - mon
+                - tue
+                - wed
+                - thu
+                - fri
+    action:
+      - service: switch.turn_on
+        entity_id: switch.mv2_rela
+
+  - alias: 'MV1 Stäng av Motorvärmare på avgångstid'
+    trigger:
+      platform: time_pattern
+      minutes: "/1"
+      seconds: 00
+    condition:
+      condition: and
+      conditions:
+        - condition: template
+          value_template: '{{ now().time().strftime("%H:%M") == states("input_datetime.mv1_avgangstid") }}' 
+        - condition: template
+          value_template: '{{ states.sensor.mv_kortid.state|float > 0 }}'
+        - condition: state
+          entity_id: input_boolean.mv1_aktiverad
+          state: 'on'
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: input_boolean.mv1_endast_veckodagar
+              state: 'off'
+            - condition: time
+              weekday:
+                - mon
+                - tue
+                - wed
+                - thu
+                - fri
+    action:
+      - service: switch.turn_off
+        entity_id: switch.mv1_rela
+
+  - alias: 'MV2 Stäng av Motorvärmare på avgångstid'
+    trigger:
+      platform: time_pattern
+      minutes: "/1"
+      seconds: 00
+    condition:
+      condition: and
+      conditions:
+        - condition: template
+          value_template: '{{ now().time().strftime("%H:%M") == states("input_datetime.mv2_avgangstid") }}'
+        - condition: template
+          value_template: '{{ states.sensor.mv_kortid.state|float > 0 }}'
+        - condition: state
+          entity_id: input_boolean.mv2_aktiverad
+          state: 'on'
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: input_boolean.mv2_endast_veckodagar
+              state: 'off'
+            - condition: time
+              weekday:
+                - mon
+                - tue
+                - wed
+                - thu
+                - fri
+    action:
+      - service: switch.turn_off
+        entity_id: switch.mv2_rela
+
+# Input sensors
+input_datetime:
+  mv1_avgangstid:
+    has_date: false
+    has_time: true
+    initial: 05:10
+    name: 'Avresetid'
+    icon: mdi:clock
+
+  mv2_avgangstid:
+    has_date: false
+    has_time: true  
+    initial: 06:00
+    name: 'Avresetid'
+    icon: mdi:clock
+    
+# Boolean sensors
+input_boolean:
+  mv1_endast_veckodagar:
+    name: Endast veckodagar
+    icon: mdi:calendar
+  mv2_endast_veckodagar:
+    name: Endast veckodagar
+    icon: mdi:calendar    
+  mv1_aktiverad:
+    name: Motorvärmare
+  mv2_aktiverad:
+    name: Motorvärmare    
+    
+# Template sensors
+sensor:
+  - platform: template
+    sensors:
+      mv_kortid:
+        friendly_name: 'Beräknad Körtid'
+        unit_of_measurement: h
+        value_template: >
+          {% if ((states('sensor.mv_utetemp')|float) < 10) %}
+            {% if not states('sensor.mv_utetemp') == 'unknown' %}
+              {{(states('sensor.mv_utetemp')|float * (-0.05) + 2)|round(1)}}
+            {%endif%}
+          {%else%}
+            0
+          {%endif%}
+          
+  - platform: template
+    sensors:
+      mv1_beraknad_starttid:
+        friendly_name: 'Beräknad Starttid'
+        icon_template: mdi:clock
+        value_template: >
+          {% if states('input_datetime.mv1_avgangstid') is defined %}
+            {% if ((states('sensor.mv_kortid')|float) > 0) %}
+              {{ strptime(((as_timestamp('1970-01-01 ' ~ states('input_datetime.mv1_avgangstid')) - (states('sensor.mv_kortid')|float *3600))|timestamp_local), '%Y-%m-%d %H:%M:%S').strftime("%H:%M") }}
+            {%else%}
+              Ej Nödvändig
+            {%endif%}
+          {% else %}
+              Väntar på Sensor
+          {% endif%}     
+
+  - platform: template
+    sensors:
+      mv2_beraknad_starttid:
+        friendly_name: 'Beräknad Starttid'
+        icon_template: mdi:clock
+        value_template: >
+          {% if states('input_datetime.mv2_avgangstid') is defined %}
+            {% if ((states('sensor.mv_kortid')|float) > 0) %}
+              {{ strptime(((as_timestamp('1970-01-01 ' ~ states('input_datetime.mv2_avgangstid')) - (states('sensor.mv_kortid')|float *3600))|timestamp_local), '%Y-%m-%d %H:%M:%S').strftime("%H:%M") }}
+            {%else%}
+              Ej nödvändig
+            {%endif%}
+          {% else %}
+              Väntar på Sensor
+          {% endif%} 
+
+  - platform: template
+    sensors:
+      mv_utetemp:
+        friendly_name: 'Utetemperatur'
+        icon_template: mdi:thermometer
+        unit_of_measurement: °C
+        value_template: '{{ state_attr("weather.jarvberget", "temperature") }}'
+  
